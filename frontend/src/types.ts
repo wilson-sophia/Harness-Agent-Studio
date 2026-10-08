@@ -51,7 +51,37 @@ export type ProjectAnalysisResponse = {
   recommendations: string[]
   missingSetup: SetupItem[]
   mode: AppMode
+  signals: RepoSignals
+  analysisSource: 'model' | 'rules'
 }
+
+export type RepoSignals = {
+  owner: string
+  name: string
+  branch: string
+  language: 'go' | 'node'
+  workdir: string
+  frameworks: string[]
+  hasDockerfile: boolean
+  hasTests: boolean
+  hasLockfile: boolean
+  hasKubernetes: boolean
+  files: string[]
+}
+export type SessionInfo = { authenticated?: boolean; email?: string; csrfToken?: string; freshUntil?: string }
+export type HarnessResource = { identifier: string; name: string; type: string }
+export type RunRecord = {
+  id: string
+  mode: AppMode
+  accountId: string
+  orgIdentifier: string
+  projectIdentifier: string
+  pipelineIdentifier: string
+  executionId: string
+  repoUrl: string
+  createdAt: string
+}
+export type DemoConfig = { configured: boolean; repository: string; pipelineIdentifier: string }
 
 export type HarnessConnection = {
   accountId: string

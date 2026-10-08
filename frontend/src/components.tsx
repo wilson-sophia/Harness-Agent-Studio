@@ -47,6 +47,7 @@ type FormPanelProps = {
   ) => void
   onAnalyze: () => void
   onGenerate: () => void
+  canGenerate?: boolean
   compact?: boolean
   showConnection?: boolean
   showTargets?: boolean
@@ -80,23 +81,6 @@ export function Field({
   )
 }
 
-export function TextAreaField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-}) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <textarea value={value} onChange={(event) => onChange(event.target.value)} />
-    </label>
-  )
-}
-
 export function ProjectFormPanel({
   form,
   connection,
@@ -106,6 +90,7 @@ export function ProjectFormPanel({
   onConnectionChange,
   onAnalyze,
   onGenerate,
+  canGenerate = true,
   compact = false,
   showConnection = false,
   showTargets = false,
@@ -143,7 +128,7 @@ export function ProjectFormPanel({
       )}
 
       <div className="button-stack">
-        <button className="secondary-action" type="button" onClick={onAnalyze}>
+        <button className="secondary-action" type="button" disabled={status === 'loading' || !form.repoUrl.trim()} onClick={onAnalyze}>
           {activeAction === 'analyze' && status === 'loading' ? (
             <span className="loader" />
           ) : (
@@ -151,7 +136,7 @@ export function ProjectFormPanel({
           )}
           <span>Analyze</span>
         </button>
-        <button className="primary-action" type="button" onClick={onGenerate}>
+        <button className="primary-action" type="button" disabled={status === 'loading' || !canGenerate} onClick={onGenerate}>
           {activeAction === 'generate' && status === 'loading' ? (
             <span className="loader light" />
           ) : (
@@ -174,11 +159,7 @@ export function ProjectFormPanel({
             value={form.imageName}
             onChange={(value) => onFieldChange('imageName', value)}
           />
-          <TextAreaField
-            label="Detected Context"
-            value={form.projectDescription}
-            onChange={(value) => onFieldChange('projectDescription', value)}
-          />
+          <div className="field"><span>Detected Context</span><p className="field-note">{form.projectDescription || 'Analyze the repository to detect its build context.'}</p></div>
         </>
       )}
 
@@ -208,29 +189,6 @@ export function ProjectFormPanel({
         </section>
       )}
 
-      <label className="toggle-row">
-        <input
-          type="checkbox"
-          checked={form.includeDeploy}
-          onChange={(event) => onFieldChange('includeDeploy', event.target.checked)}
-        />
-        <span>Include deploy stage</span>
-      </label>
-
-      {form.includeDeploy && (
-        <div className="deploy-fields">
-          <Field
-            label="K8s Connector"
-            value={form.k8sConnectorRef}
-            onChange={(value) => onFieldChange('k8sConnectorRef', value)}
-          />
-          <Field
-            label="Namespace"
-            value={form.namespace}
-            onChange={(value) => onFieldChange('namespace', value)}
-          />
-        </div>
-      )}
     </aside>
   )
 }

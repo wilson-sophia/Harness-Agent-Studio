@@ -1,45 +1,47 @@
 # Architecture
 
-## Big Picture
-
-Harness Onboarding Agent has three moving parts:
+## Request flows
 
 ```text
-Repository URL + branch + mode -> repository analysis -> generated defaults -> missing setup -> Go YAML generator -> React pipeline workbench
+Preview: URL + branch -> GitHub commit/tree + go.mod/package.json -> safe signals
+        -> optional model recommendations -> Go-owned YAML -> graph + checklist
+
+Connected: email/password -> HttpOnly session -> save encrypted Harness token
+           -> discover org/project/connectors -> generate -> create in Harness
+           -> explicit trigger -> fetch owned run status
+
+Demo: authenticated user -> backend fixed sandbox pipeline -> Harness execution
+      -> owned run status (never accepts repository or YAML from the caller)
 ```
 
-In plain language:
+The analyzer never clones or executes code. It downloads a public archive from the fixed `codeload.github.com` host with a 12-second timeout, no redirects, and compressed/uncompressed size and file-count bounds. File paths that become shell command arguments are constrained before YAML generation. This version supports a Go module or Node package; on a monorepo it picks a detected work directory. Dependency names and feature flags may go to the optional model. The model cannot choose executable commands or write Harness YAML.
 
-- Harness is the CI/CD engine.
-- Pipeline YAML is the build-and-release instruction sheet.
-- The analysis layer explains what the system detected and recommends.
-- Missing setup explains why Preview Mode cannot run yet.
-- Generated defaults reduce manual input for service name, image name, and detected context.
-- The Go backend writes the final instruction sheet.
-- The React frontend lets a developer inspect it before sending it to Harness.
+The Go generator composes a Harness CI stage with clone, conditional test, build, and optional Docker publish steps. A Kubernetes CI infrastructure connector is required for a real run. CD deployment requires separate Harness service/environment definitions and is intentionally not represented as a fake deploy step.
 
-## Modes
+## Session and ownership
 
-Preview Mode does not need credentials and never executes user code. It generates a Harness pipeline draft and lists the account, token, connector, and secret setup needed for a real run.
+The backend stores bcrypt password hashes, SHA-256 hashes of random session/remember values, encrypted Harness API tokens, and run records in one local JSON file. The encryption key is supplied through an environment variable; it is never stored in the data file. Auth cookies are HttpOnly and SameSite Strict. Browser writes need the exact configured Origin and a CSRF token.
 
-Demo Mode is reserved for a backend-owned Harness sandbox and trusted demo repositories. It should not run arbitrary user repositories with platform-owned credentials.
+- Idle timeout: 30 minutes without requests.
+- Absolute timeout: one session ends after 8 hours even with activity.
+- Remember: for 14 days, a rotating cookie can create a new low-assurance session. It does not renew password freshness.
+- Fresh auth: save/remove Harness credentials and create/trigger executions require password verification in the last 5 minutes.
 
-Connected Mode uses a user's Harness Account ID and API token. Tokens should stay on the backend and should not be sent to an LLM prompt.
+Every Connected credential and run is keyed to the signed-in user ID. Run detail lookup verifies ownership before contacting Harness. Demo uses platform credentials only for a fixed trusted pipeline; each user has a 3-run daily limit.
 
-## Current Milestone
+This is a single-process local store. A deployed multi-instance service should replace it with a transactional database, central session store, key management, audit logging, rate limiting, and registration verification.
 
-The current implementation uses deterministic analysis rules rather than a live LLM call. This keeps the demo reliable and makes the architecture easy to explain in interviews.
+## API
 
-Repository analysis is the bridge toward a real agent. Today it parses the URL and uses keyword rules over inferred context. Later, the backend can scan repository files and send structured context to an LLM provider for richer project understanding.
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/projects/analyze` | Public GitHub scan and optional model recommendations |
+| `POST /api/pipelines/generate` | Deterministic Harness YAML draft |
+| `POST /api/auth/register`, `/login`, `/reauth`, `/logout`; `GET /api/auth/me` | Login lifecycle |
+| `GET/POST/DELETE /api/harness/connection` | User-owned encrypted connection |
+| `GET /api/harness/resources` | Harness orgs, projects, connectors |
+| `POST /api/pipelines/create` | Create a pipeline in the user's Harness project |
+| `GET /api/runs`, `POST /api/runs/:id/trigger`, `GET /api/runs/:id` | Owned run lifecycle |
+| `GET /api/demo/config`, `POST /api/demo/run` | Fixed sandbox |
 
-## Next Milestone
-
-Add real Harness integration:
-
-1. Store Harness account, org, project, and API token in environment variables.
-2. Add repository file scanning for go.mod, Dockerfile, tests, and manifests.
-3. Add an LLM provider interface for project analysis.
-4. Validate LLM output before generating YAML.
-5. Add an endpoint that creates or updates a pipeline through Harness APIs.
-6. Add an endpoint that triggers a pipeline execution.
-7. Stream pipeline execution status and logs into the frontend.
+The Harness paths, request bodies, `x-api-key`, and `Harness-Account` header follow the [Harness Pipeline API](https://apidocs.harness.io/pipelines), [Execution API](https://apidocs.harness.io/pipeline-execution), and [API authentication guide](https://developer.harness.io/docs/platform/automation/api/api-quickstart/). Real-account compatibility needs validation against the user's Harness region and connectors.

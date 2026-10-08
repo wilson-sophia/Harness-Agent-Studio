@@ -6,4 +6,4 @@ dist/
 coverage/
 bin/
 tmp/
-
+backend/data/
